@@ -43,7 +43,6 @@ cache_prompts: bool = config["other_settings"]["cache_prompts"]
 
 # Main setup/ helper process
 def get_qna() -> QnA: 
-    print("starting getqna process")
     documents = read_directory(documents_path)
     prompt = llm_prompt + str(documents)
     default_message = default_msg
