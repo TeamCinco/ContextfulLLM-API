@@ -33,4 +33,4 @@ qna_instance = QnA(prompt=prompt, default_msg=default_message, response_func=res
 
 1. Place instruction documents in the documents folder
 2. Provide your openrouter api key in a .env folder
-3. Change nessesary settings in settings.ini (affects behavior of the `get_qna()` setup function only)
+3. Change nessesary settings in settings.ini (affects behavior of the `get_qna()` setup function only).
