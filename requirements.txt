@@ -1,7 +1,6 @@
 configparser
 dotenv
 openai
-groq
 pydantic
 instructor
 ratelimit
