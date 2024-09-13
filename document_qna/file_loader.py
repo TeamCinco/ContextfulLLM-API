@@ -1,7 +1,6 @@
 import os
 # from unstructured.partition.auto import partition
 import textract
-import nltk
 
 # nltk.download('punkt')
 

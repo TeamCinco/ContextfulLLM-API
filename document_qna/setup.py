@@ -3,6 +3,7 @@ import configparser
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from groq import Groq
 from functools import partial
 
 # Internal imports
@@ -28,12 +29,22 @@ cached_prompts_path = os.path.join(os.getcwd(), config["storage"]["cached_prompt
 
 # Inference
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 model = str(config["inference"]["model"])
 temperature = float(config["inference"]["temperature"])
 
+groq_model = str(config["inference"]["groq_model"])
+groq_max_tokens = int(config["inference"]["groq_max_tokens"])
+
 client_args = {
-"model": model,
-"temperature": temperature, # To tune
+    "model": model,
+    "temperature": temperature, # To tune
+}
+
+client_args_groq = {
+    "model": groq_model,
+    "max_tokens": groq_max_tokens,
+    "temperature": temperature, # To tune   
 }
 
 # Other settings
@@ -95,9 +106,12 @@ def get_qna() -> QnA:
 
 # See https://openrouter.ai/docs/parameters
 def get_inference_func():
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key = OPENROUTER_API_KEY,
+    # client = OpenAI(
+    #     base_url="https://openrouter.ai/api/v1",
+    #     api_key = OPENROUTER_API_KEY,
+    # )
+    client_groq = Groq(
+        api_key = GROQ_API_KEY
     )
-    response_func = partial(get_response, client = client, client_args = client_args)
+    response_func = partial(get_response, client = client_groq, client_args = client_args_groq)
     return response_func
