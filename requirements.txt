@@ -1,0 +1,11 @@
+configparser
+dotenv
+openai
+groq
+pydantic
+instructor
+ratelimit
+logging
+inspect
+xxhash
+textract
