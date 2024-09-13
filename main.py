@@ -1,4 +1,4 @@
-from document_qna.setup import get_qna
+from document_qna.setup.setup import get_qna
 from document_qna.qna import QnA
 
 qna_instance = get_qna()
