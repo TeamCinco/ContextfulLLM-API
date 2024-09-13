@@ -1,3 +1,4 @@
 .env
 documents/*
+!documents/.gitkeep
 cached_prompts/*
