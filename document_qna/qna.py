@@ -9,7 +9,7 @@ import inspect
 
 class QnA():
     
-    def __init__(self, prompt: str, default_msg: Optional[str], response_func: Callable[[str], Dict], chat_history: Optional[List[Dict]] = None) -> None:
+    def __init__(self, prompt: str, default_msg: Optional[str], response_func: Callable[[str], Dict], chat_history: Optional[List[Dict[str, str]]] = None) -> None:
         self.response_func = response_func
         self.chat_history = chat_history or list()
         
@@ -31,6 +31,7 @@ class QnA():
     def get_assistant_response(self):
         chat_history_prepended = self.prepends + self.chat_history
         new_response = self.response_func(chat_history_prepended)
+        new_response = self.strip_response_dict(new_response)
         self.chat_history.append(new_response)
         return new_response["content"]
         
@@ -44,6 +45,14 @@ class QnA():
         self.chat_history = self.chat_history[:index]
         return
         
+    # Removes all unwanted response fields from obtained response
+    # Post processing for response dict
+    # I love hardcoding ahahahahaha
+    @staticmethod
+    def strip_response_dict(msg: Dict[str, str], keys_to_keep: List[str] = ["role", "content"]):
+        return {key: msg[key] for key in keys_to_keep if key in msg}
+        
+    
     
     # For manually appending bot/ system messages (w/o going through llm)
     # To add user message (and getting an LLM response), use the __call__ method
@@ -87,7 +96,7 @@ class QnA():
 
         # Check existance of required keys
         for key in required_keys:
-            if not key in usr_msg.keys():
+            if key not in usr_msg.keys():
                 raise KeyError(f"Missing Required Key: {key} from User Message dict")
             if not QnA._string_coerce_check(usr_msg[key]):
                 raise TypeError(f"Corresponding value for required Key: {key} could not be converted to string")

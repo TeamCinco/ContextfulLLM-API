@@ -1,7 +1,7 @@
 from document_qna.setup.setup import get_qna
 from document_qna.qna import QnA
 
-qna_instance = get_qna()
+qna_instance: QnA = get_qna()
 
 while True:
     user_msg = input("Input current user message (type \"quit\" to exit): ")
