@@ -61,7 +61,7 @@ def get_qna() -> QnA:
 
 def get_qna_finance(tickers: Union[List[str], str], *args, **kwargs) -> QnA:
     tickers = tickers if isinstance(tickers, list) else [tickers]
-    documents = fetch_stock_data
+    documents = fetch_stock_data(tickers, *args, *kwargs)
     prompt = llm_prompt_finance + str(documents)
     response_func = get_inference_func()
     
