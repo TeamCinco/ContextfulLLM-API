@@ -1,6 +1,6 @@
 import configparser
 import os
-from typing import Dict, Any, Callable
+from typing import Callable, List, Union
 from dotenv import load_dotenv
 from openai import OpenAI
 from functools import partial
@@ -8,8 +8,9 @@ from functools import partial
 # Internal imports
 from ..qna import QnA
 from .file_loader import read_directory
-from .llm_prompt import llm_prompt, default_msg
+from .llm_prompt import llm_prompt, llm_prompt_finance, default_msg
 from .get_response import get_response
+from .get_finance import fetch_stock_data
 
 # Configuration setup
 def load_config() -> configparser.ConfigParser:
@@ -54,6 +55,14 @@ def get_inference_func() -> Callable:
 def get_qna() -> QnA:
     documents = read_directory(documents_path)
     prompt = llm_prompt + str(documents)
+    response_func = get_inference_func()
+    
+    return QnA(prompt=prompt, default_msg=default_msg, response_func=response_func)
+
+def get_qna_finance(tickers: Union[List[str], str], *args, **kwargs) -> QnA:
+    tickers = tickers if isinstance(tickers, list) else [tickers]
+    documents = fetch_stock_data
+    prompt = llm_prompt_finance + str(documents)
     response_func = get_inference_func()
     
     return QnA(prompt=prompt, default_msg=default_msg, response_func=response_func)

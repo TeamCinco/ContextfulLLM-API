@@ -41,7 +41,7 @@ class QnA():
     def restart_from_index(self, index: int):
         # OOB check
         if index >= len(self.chat_history) or index < 0:
-            return None
+            raise ValueError(f"Index {index} is out of bounds. Valid range is 0 to {len(self.chat_history) - 1}.")
         self.chat_history = self.chat_history[:index]
         return
         
@@ -49,7 +49,8 @@ class QnA():
     # Post processing for response dict
     # I love hardcoding ahahahahaha
     @staticmethod
-    def strip_response_dict(msg: Dict[str, str], keys_to_keep: List[str] = ["role", "content"]):
+    def strip_response_dict(msg: Dict[str, str], keys_to_keep: Optional[List[str]] = None):
+        keys_to_keep = keys_to_keep or ["role", "content"]
         return {key: msg[key] for key in keys_to_keep if key in msg}
         
     

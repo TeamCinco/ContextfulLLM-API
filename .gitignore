@@ -2,3 +2,4 @@
 documents/*
 !documents/.gitkeep
 cached_prompts/*
+.aider*
