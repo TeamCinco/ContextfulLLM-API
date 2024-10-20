@@ -45,6 +45,9 @@ class QnA():
         self.chat_history = self.chat_history[:index]
         return
         
+    def save_chat(self):
+        return self.prompt, self.default_msg, self.chat_history    
+        
     # Removes all unwanted response fields from obtained response
     # Post processing for response dict
     # I love hardcoding ahahahahaha

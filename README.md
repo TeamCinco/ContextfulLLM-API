@@ -1,4 +1,6 @@
-## How to use:
+# FAQ-LLM-BOT (abstracted inferface)
+
+## How to use
 
 Obtain a `QnA` instance via one of the helper functions from `get_qna` and provide the instance with the user query, a system/ bot response will be returned and the instance will automatically store the chat history:
 
@@ -7,7 +9,7 @@ Obtain a `QnA` instance via one of the helper functions from `get_qna` and provi
 from document_qna.setup import get_qna
 from document_qna.qna import QnA
 
-qna_instance: QnA = get_qna()
+qna_instance: QnA = get_qna() # loads documents from specified folder directly, see settings.ini
 
 while True:
     user_msg = input("Input current user message (type \"quit\" to exit): ")
@@ -17,37 +19,72 @@ while True:
     print(bot_msg)
 ```
 
-or
+Check other ways of initializing a QnA object [here](document_qna/README.md)
+
+## Restarting chat from index
+
+To restart the chat from a certain index (w.r.t. only the chat history), you can do the following:
 
 ```python
-# from main_finance.py, example usage
-from document_qna.setup import get_qna_finance
-from document_qna.qna import QnA
-
-
-tickers = ["TSLA", "APPL"]
-period = "1mo"
-
-qna_instance: QnA = get_qna_finance(tickers, period)
-
-# Rest same as main.py
+qna_instance.restart_from_index(<index number>)
 ```
 
-
-or, you may initialize the `QnA` instance by providing your own system prompt (including the documents), default assistant message (can be None) and an inference callable, which takes in a message and returns a system/llm response
+Say, you have the following chat history:
 
 ```python
-# from document_qna/setup.py
-documents = read_directory(documents_path)
-prompt = llm_prompt + str(documents)
-default_message = default_msg
-response_func = get_inference_func()
+[
+    {"role": "system", "content": "Some system prompt"}, # Is not counted
+    {"role": "assistant", "content": "Default message e.g. how can I help you today"}, # Is not counted
+    {"role": "user", "content": "blah blah blah"}, # index = 1
+    {"role": "assistant", "content": "blah blah blah blah"}, # index = 2
+    {"role": "user", "content": "yada yada yada"}, # index = 3
+    {"role": "assistant", "content": "yada yada yada yada"}, # index = 4
+]
+```
 
-qna_instance = QnA(prompt=prompt, default_msg=default_message, response_func=response_func)
+And then you do
+
+```python
+qna_instance.restart_from_index(2)
+```
+
+Then the new chat history becomes:
+
+```python
+[
+    {"role": "system", "content": "Some system prompt"}, # Is not counted
+    {"role": "assistant", "content": "Default message e.g. how can I help you today"}, # Is not counted
+    {"role": "user", "content": "blah blah blah"}, # index = 1
+    {"role": "assistant", "content": "blah blah blah blah"}, # index = 2
+]
+```
+
+## Storing chat and reviving it later
+
+A user might want to perform a chat across multiple sessions, where we won't keep the session alive.
+
+We can store all relevant information of the instance using:
+
+```python
+prompt, default_msg, chat_history = qna_instance.save_chat()
+
+# Store `prompt, default_msg, chat_history` somewhere 
+some_storage_function(prompt, default_msg, chat_history)
+```
+
+Then, we can retrieve the chat using:
+
+```python
+prompt, default_msg, chat_history = some_retrieval_function()
+response_func = get_inference_func() # example function, check document_qna/setup/setup.py
+
+qna_instance = QnA(prompt=prompt, default_msg=default_message, response_func=response_func, chat_history = chat_history)
+
+# Use this qna_instance for chatting
 ```
 
 ## Setup
 
 1. Place instruction documents in the documents folder
-2. Provide your openrouter api key in a .env folder
+2. Provide the api key of a provider of your choice in a .env folder (check (and clone) the [.env.template](.env.template) file)
 3. Change nessesary settings in settings.ini (affects behavior of the `get_qna()` setup function only).
