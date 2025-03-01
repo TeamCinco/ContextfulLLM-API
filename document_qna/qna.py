@@ -1,99 +1,174 @@
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import inspect
+from openai import OpenAI
 
 
-# Need to Sync the chat history between the outer discord layer and the inner "LLM" layer
-# For chat restart functionality (see below)
-# Restart: User decided to change their question
-# 
+# Right now, all additional information/ contexts are performed by "user"  (i.e. The frontend)
+# To perform model driven retrieval, we will use function calling from the openAI client, do note that not all openAI endpoints supports function calling
 
-class QnA():
-    
-    def __init__(self, prompt: str, default_msg: Optional[str], response_func: Callable[[str], Dict], chat_history: Optional[List[Dict[str, str]]] = None) -> None:
-        self.response_func = response_func
+
+class QnA:
+    def __init__(
+        self,
+        client: OpenAI,
+        client_args: Optional[Dict[str, Any]],
+        prompt: str,
+        additionals: Optional[Dict[str, str]],
+        chat_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        self.client = client
         self.chat_history = chat_history or list()
-        
-        #Both self.prompts and self.default_msg is not nessesary, 
+
+        # Both self.prompts and self.default_msg is not nessesary,
         # they are here so that the outer layer can access it
         self.prompt = self._make_message("system", prompt)
-        self.default_msg = self._make_message("assistant", default_msg) if default_msg else None
-        
-        # Basically just self.prompt (and self.default_msg if provided)
-        self.prepends = self._prepended_msgs() 
-    
-    def __call__(self, user_msg: Union[str, Dict]) -> Any:
-        new_msg = self._process_new_msg(user_msg)
+        self.additionals = additionals or {}
+        self.client_args = client_args or {}
+
+    def __call__(
+        self, user_msg: Union[str, Dict], stream: bool = False, **call_args
+    ) -> Any:
+        if isinstance(user_msg, str):
+            new_msg = self._make_message("user", user_msg)
+        else:
+            new_msg = user_msg
+
         self.chat_history.append(new_msg)
-        assistant_msg = self.get_assistant_response()
-        return assistant_msg
-    
-    # Automatically appends assistance response to chat history  
-    def get_assistant_response(self):
-        chat_history_prepended = self.prepends + self.chat_history
-        new_response = self.response_func(chat_history_prepended)
+
+        if stream:
+            # Return a generator with state management
+            return self._streaming_context(**call_args)
+        else:
+            assistant_msg = self.get_assistant_response(**call_args)
+            self.chat_history.append(assistant_msg)
+            return assistant_msg.get("content")
+
+    def _streaming_context(self, **call_args):
+        """Creates a generator that streams the result and handles state management.
+
+        Call_args override client args
+
+        """
+        assistant_msg = {"role": "assistant", "content": ""}
+
+        full_call_args = self.client_args | call_args
+
+        chat_history_prepended = (
+            self.prompt + self.additionals_to_messages() + self.chat_history
+        )
+        stream = self.client.chat.completions.create(
+            messages=chat_history_prepended, stream=True, **full_call_args
+        )
+
+        try:
+            for chunk in stream:
+                if hasattr(chunk.choices[0], "delta") and hasattr(
+                    chunk.choices[0].delta, "content"
+                ):
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        assistant_msg["content"] += content
+                        yield content
+        finally:
+            # This will run after the generator is exhausted or if an exception occurs
+            # Ensure we update the conversation state
+            self.chat_history.append(assistant_msg)
+
+    # Automatically appends assistance response to chat history
+    def get_assistant_response(self, **call_args):
+        """Obtains the assistant response via stream results"""
+
+        chat_history_prepended = (
+            self.prompt + self.additionals_to_messages() + self.chat_history
+        )
+
+        full_call_args = self.client_args | call_args
+
+        new_response = self.client.chat.completions.create(
+            messages=chat_history_prepended, **full_call_args
+        )
         new_response = self.strip_response_dict(new_response)
-        self.chat_history.append(new_response)
-        return new_response["content"]
-        
+        return new_response
+
     # Index is zero-indexed with regards to chat history
     # i.e. The system message and the default message does not count
     # Not automatically performing inference
     def restart_from_index(self, index: int):
         # OOB check
         if index >= len(self.chat_history) or index < 0:
-            raise ValueError(f"Index {index} is out of bounds. Valid range is 0 to {len(self.chat_history) - 1}.")
+            raise ValueError(
+                f"Index {index} is out of bounds. Valid range is 0 to {len(self.chat_history) - 1}."
+            )
         self.chat_history = self.chat_history[:index]
         return
-        
-    def save_chat(self):
-        return self.prompt, self.default_msg, self.chat_history    
-        
+
+    def append_additional(self, new_addition: Dict[str, str]):
+        """Appends additional information/ context from the
+
+        Old keys will get overridden by new keys
+        """
+        self.additionals.update(new_addition)
+
+    def remove_additional(self, additional_key: str):
+        self.additionals.pop(additional_key)
+
+    def additionals_to_messages(self):
+        additionals_msg_list = []
+        for key, value in self.additionals.items():
+            new_msg = self._make_message(
+                "assistant", f"Additional information: \n Content: \n {value}"
+            )
+            additionals_msg_list.append(new_msg)
+
+        return additionals_msg_list
+
+    def serialize_chat(self):
+        """Serialize all chats (WIP)
+
+        Returns:
+            _type_: _description_
+        """
+        return self.prompt, self.default_msg, self.chat_history, self.additionals
+
     # Removes all unwanted response fields from obtained response
     # Post processing for response dict
     # I love hardcoding ahahahahaha
     @staticmethod
-    def strip_response_dict(msg: Dict[str, str], keys_to_keep: Optional[List[str]] = None):
+    def strip_response_dict(
+        msg: Dict[str, str], keys_to_keep: Optional[List[str]] = None
+    ):
         keys_to_keep = keys_to_keep or ["role", "content"]
         return {key: msg[key] for key in keys_to_keep if key in msg}
-        
-    
-    
+
     # For manually appending bot/ system messages (w/o going through llm)
     # To add user message (and getting an LLM response), use the __call__ method
-    def append_message(self,
-                       role: Optional[str] = None, 
-                       content:Optional[str] = None, 
-                       msg_dict: Optional[Dict] = None):
-        
+    def append_message(
+        self,
+        role: Optional[str] = None,
+        content: Optional[str] = None,
+        msg_dict: Optional[Dict] = None,
+    ):
         if not (role and content) or msg_dict:
             raise ValueError("Must provide either (role & content) or msg_dict")
-        
+
         if msg_dict:
             self._verify_msg_dict(msg_dict)
             msg = msg_dict
         else:
             msg = self._make_message(role, content)
         self.chat_history.append(msg)
-    
+
     def _prepended_msgs(self):
         msg = [self.prompt]
         if self.default_msg:
             msg += [self.default_msg]
         return msg
-    
+
     @staticmethod
-    def _make_message(role: str, content:str):
+    def _make_message(role: str, content: str):
         msg = {"role": role, "content": content}
         return msg
 
-    @staticmethod
-    def _process_new_msg(user_msg: Union[str, Dict]):
-        if isinstance(user_msg, str):
-            return QnA._make_message("user", user_msg)
-        else: #if isinstance(user_msg, dict):
-            QnA._verify_msg_dict(user_msg)
-            return user_msg
-    
     @staticmethod
     def _verify_msg_dict(usr_msg: Dict):
         required_keys = ["role", "content"]
@@ -103,11 +178,14 @@ class QnA():
             if key not in usr_msg.keys():
                 raise KeyError(f"Missing Required Key: {key} from User Message dict")
             if not QnA._string_coerce_check(usr_msg[key]):
-                raise TypeError(f"Corresponding value for required Key: {key} could not be converted to string")
+                raise TypeError(
+                    f"Corresponding value for required Key: {key} could not be converted to string"
+                )
         return
-        
+
     @staticmethod
     def _string_coerce_check(value):
-        return inspect.getattr_static(value, '__str__', None) is not None or inspect.getattr_static(value, '__repr__', None) is not None
-        
-    
+        return (
+            inspect.getattr_static(value, "__str__", None) is not None
+            or inspect.getattr_static(value, "__repr__", None) is not None
+        )
