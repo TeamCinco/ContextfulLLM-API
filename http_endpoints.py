@@ -39,7 +39,7 @@ v1_router = APIRouter(prefix="/v1")
 
 # Default prompt
 # (Current prompt is a placeholder: Shv2 1-3-25)
-with open("prompt/default_prompt.txt", "r") as file:
+with open(os.path.join(os.path.dirname(__file__), "prompt/default_prompt.txt"), "r") as file:
     default_prompt = file.read()
 
 # Store QnA instances and their locks
