@@ -66,6 +66,15 @@ class QnA:
         stream = self.client.chat.completions.create(
             messages=chat_history_prepended, stream=True, **full_call_args
         )
+        
+        # Iterate over the stream and yield each chunk
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                assistant_msg["content"] += chunk.choices[0].delta.content
+                yield chunk.choices[0].delta.content
+        
+        # Add the full assistant message to the chat history
+        self.chat_history.append(assistant_msg)
     # Automatically appends assistance response to chat history
     def get_assistant_response(self, **call_args):
         """Obtains the assistant response via stream results"""
