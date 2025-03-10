@@ -21,7 +21,7 @@ class QnA:
 
         # Both self.prompts and self.default_msg is not nessesary,
         # they are here so that the outer layer can access it
-        self.prompt = self._make_message("system", prompt)
+        self.prompt = [self._make_message("system", prompt)]
         self.additionals = additionals or {}
         self.client_args = client_args or {}
 
@@ -44,42 +44,36 @@ class QnA:
             return assistant_msg.get("content")
 
     def _streaming_context(self, **call_args):
-        """Creates a generator that streams the result and handles state management.
-
-        Call_args override client args
-
-        """
+        """Creates a generator that streams the result and handles state management."""
         assistant_msg = {"role": "assistant", "content": ""}
-
         full_call_args = self.client_args | call_args
-
-        chat_history_prepended = (
-            self.prompt + self.additionals_to_messages() + self.chat_history
-        )
+        
+        # Build chat history using list methods instead of concatenation
+        chat_history_prepended = []
+        
+        # Add prompt - handle both dict and list cases
+        if isinstance(self.prompt, list):
+            chat_history_prepended.extend(self.prompt)
+        else:
+            chat_history_prepended.append(self.prompt)
+        
+        # Add additional context messages
+        chat_history_prepended.extend(self.additionals_to_messages())
+        
+        # Add chat history
+        chat_history_prepended.extend(self.chat_history)
+        
         stream = self.client.chat.completions.create(
             messages=chat_history_prepended, stream=True, **full_call_args
         )
-
-        try:
-            for chunk in stream:
-                if hasattr(chunk.choices[0], "delta") and hasattr(
-                    chunk.choices[0].delta, "content"
-                ):
-                    content = chunk.choices[0].delta.content
-                    if content:
-                        assistant_msg["content"] += content
-                        yield content
-        finally:
-            # This will run after the generator is exhausted or if an exception occurs
-            # Ensure we update the conversation state
-            self.chat_history.append(assistant_msg)
-
     # Automatically appends assistance response to chat history
     def get_assistant_response(self, **call_args):
         """Obtains the assistant response via stream results"""
 
+        # Ensure prompt is always a list before concatenation
+        prompt_as_list = self.prompt if isinstance(self.prompt, list) else [self.prompt]
         chat_history_prepended = (
-            self.prompt + self.additionals_to_messages() + self.chat_history
+            prompt_as_list + self.additionals_to_messages() + self.chat_history
         )
 
         full_call_args = self.client_args | call_args
@@ -128,7 +122,8 @@ class QnA:
         Returns:
             _type_: _description_
         """
-        return self.prompt, self.default_msg, self.chat_history, self.additionals
+        default_msg = self.default_msg if hasattr(self, 'default_msg') else None
+        return self.prompt, default_msg, self.chat_history, self.additionals
 
     # Removes all unwanted response fields from obtained response
     # Post processing for response dict
@@ -159,8 +154,8 @@ class QnA:
         self.chat_history.append(msg)
 
     def _prepended_msgs(self):
-        msg = [self.prompt]
-        if self.default_msg:
+        msg = self.prompt.copy()  # Make a copy to avoid modifying the original
+        if hasattr(self, 'default_msg') and self.default_msg:
             msg += [self.default_msg]
         return msg
 
