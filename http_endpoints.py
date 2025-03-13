@@ -281,13 +281,22 @@ async def get_stream_response(job_id: str):
     async def stream_generator():
         async with lock:
             try:
+                # We need to properly await each chunk
                 for chunk in qna_instance(message, stream=True):
-                    yield chunk
+                    yield f"{chunk}\n"  # Add newline to ensure proper flushing
             except Exception as e:
                 logger.error(f"Error in streaming: {str(e)}", exc_info=True)
-                yield f"Error: {str(e)}"
+                yield f"Error: {str(e)}\n"
 
-    return StreamingResponse(stream_generator(), media_type="text/plain")
+    # Use the async generator directly with StreamingResponse
+    return StreamingResponse(
+        stream_generator(), 
+        media_type="text/plain",
+        headers={
+            "X-Accel-Buffering": "no",  # Disable proxy buffering
+            "Cache-Control": "no-cache", # Disable caching
+        }
+    )
 
 
 @v1_router.post("/additionals", tags=["context"], response_model=ServiceResponse)

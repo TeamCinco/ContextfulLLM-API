@@ -63,15 +63,23 @@ class QnA:
         # Add chat history
         chat_history_prepended.extend(self.chat_history)
         
+        # Set explicit parameters for streaming
+        if 'model' not in full_call_args:
+            # Make sure we have a model specified
+            full_call_args['model'] = 'gpt-4'
+            
         stream = self.client.chat.completions.create(
-            messages=chat_history_prepended, stream=True, **full_call_args
+            messages=chat_history_prepended, 
+            stream=True, 
+            **full_call_args
         )
         
         # Iterate over the stream and yield each chunk
         for chunk in stream:
-            if chunk.choices[0].delta.content:
-                assistant_msg["content"] += chunk.choices[0].delta.content
-                yield chunk.choices[0].delta.content
+            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                assistant_msg["content"] += content
+                yield content
         
         # Add the full assistant message to the chat history
         self.chat_history.append(assistant_msg)
